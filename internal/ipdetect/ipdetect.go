@@ -5,17 +5,25 @@ import (
 	"fmt"
 	"net"
 	"runtime"
+	"strings"
 )
 
 type Options struct {
 	PreferredIface string
 	// Method: "" or "auto" (default), "route", "udp", "iface"
 	Method string
+	// Optional: only accept an IPv4 from the WiFi interface connected to this SSID.
+	WiFiSSID string
 }
 
 type Detector struct {
 	opt Options
 }
+
+var (
+	ErrWiFiSSIDUnavailable = errors.New("wifi ssid unavailable")
+	ErrWiFiSSIDNotMatched  = errors.New("wifi ssid not matched")
+)
 
 func NewDetector(opt Options) *Detector {
 	if opt.Method == "" {
@@ -25,6 +33,21 @@ func NewDetector(opt Options) *Detector {
 }
 
 func (d *Detector) DetectIPv4() (net.IP, string, error) {
+	if ssid := strings.TrimSpace(d.opt.WiFiSSID); ssid != "" {
+		ifname, actual, err := wifiIfaceForSSID(ssid)
+		if err != nil {
+			return nil, "", err
+		}
+		if d.opt.PreferredIface != "" && d.opt.PreferredIface != ifname {
+			return nil, "", fmt.Errorf("%w: preferred iface=%s but ssid %q is on iface=%s", ErrWiFiSSIDNotMatched, d.opt.PreferredIface, actual, ifname)
+		}
+		ip, err := ipv4FromIface(ifname)
+		if err != nil {
+			return nil, "", err
+		}
+		return ip, fmt.Sprintf("wifi:%s ssid:%s", ifname, actual), nil
+	}
+
 	// If user pins iface, use it first.
 	if d.opt.PreferredIface != "" {
 		ip, err := ipv4FromIface(d.opt.PreferredIface)

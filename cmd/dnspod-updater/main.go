@@ -30,6 +30,7 @@ func main() {
 	ipDetector := ipdetect.NewDetector(ipdetect.Options{
 		PreferredIface: cfg.IPPreferredIface,
 		Method:         cfg.IPDetectMethod,
+		WiFiSSID:       cfg.WiFiSSID,
 	})
 
 	client := dnspod.NewClient(dnspod.ClientOptions{

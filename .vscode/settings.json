@@ -7,14 +7,17 @@
         "GOOS",
         "Iface",
         "ifaces",
+        "ifis",
         "ifname",
         "ipdetect",
         "IRTT",
         "ldflags",
+        "mdlayher",
         "nonroot",
         "ONESHOT",
         "proc",
         "resp",
-        "trimpath"
+        "trimpath",
+        "wifi"
     ]
 }

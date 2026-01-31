@@ -98,11 +98,16 @@ docker run --rm --network host \
 
 - `IP_DETECT_METHOD`：`auto`(默认) / `route` / `udp` / `iface`
 - `IP_PREFERRED_IFACE`：指定网卡名（如 `eth0`），配合 `iface` 或作为优先项
+- `WIFI_SSID`：可选；指定后仅当检测到“某个无线网卡正在连接该 SSID”时才会获取其 IPv4，否则会记录日志并跳过本轮更新
 
 说明：
 
 - `route`：Linux 下解析 `/proc/net/route` 找默认路由网卡，然后取该网卡 IPv4（推荐）
 - `udp`：通过 UDP Dial 推断本机出站源地址
+
+注意：
+
+- `WIFI_SSID` 的实现需要在 Linux 上通过 netlink 读取当前关联的 WiFi 信息；在容器里可能需要额外权限（如 `--cap-add NET_ADMIN` 或 `privileged`），取决于宿主机内核/安全策略。
 
 ## 本地运行（Go）
 

@@ -2,6 +2,7 @@ package updater
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/hnrobert/dnspod-updater/internal/config"
 	"github.com/hnrobert/dnspod-updater/internal/dnspod"
+	"github.com/hnrobert/dnspod-updater/internal/ipdetect"
 )
 
 type IPDetector interface {
@@ -83,6 +85,10 @@ func (u *Updater) Run(ctx context.Context) error {
 func (u *Updater) checkAndUpdateOnce(ctx context.Context) error {
 	ip, src, err := u.opt.Detector.DetectIPv4()
 	if err != nil {
+		if errors.Is(err, ipdetect.ErrWiFiSSIDNotMatched) || errors.Is(err, ipdetect.ErrWiFiSSIDUnavailable) {
+			u.opt.Logger.Printf("wifi ssid constraint not satisfied, skip: %v", err)
+			return nil
+		}
 		return fmt.Errorf("detect ip: %w", err)
 	}
 	want := ip.String()

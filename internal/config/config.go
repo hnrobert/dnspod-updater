@@ -43,6 +43,7 @@ type Config struct {
 	// IP detection
 	IPPreferredIface string
 	IPDetectMethod   string
+	WiFiSSID         string
 
 	// Misc
 	UserAgent string
@@ -84,6 +85,7 @@ func FromEnv() (Config, error) {
 
 	cfg.IPPreferredIface = strings.TrimSpace(os.Getenv("IP_PREFERRED_IFACE"))
 	cfg.IPDetectMethod = strings.TrimSpace(os.Getenv("IP_DETECT_METHOD")) // "auto" (default), "route", "udp", "iface"
+	cfg.WiFiSSID = strings.TrimSpace(os.Getenv("WIFI_SSID"))
 
 	cfg.UserAgent = envDefault("USER_AGENT", "dnspod-updater/1.0")
 
