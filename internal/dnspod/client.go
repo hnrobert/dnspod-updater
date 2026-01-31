@@ -77,6 +77,36 @@ type RecordModifyResponse struct {
 	} `json:"record"`
 }
 
+type RecordListParams struct {
+	Offset       int
+	Length       int
+	SubDomain    string
+	RecordType   string
+	RecordLine   string
+	RecordLineID string
+	Keyword      string
+}
+
+type RecordListResponse struct {
+	Status Status `json:"status"`
+	Info   struct {
+		SubDomains  string `json:"sub_domains"`
+		RecordTotal string `json:"record_total"`
+		RecordsNum  string `json:"records_num"`
+	} `json:"info"`
+	Records []struct {
+		ID     string `json:"id"`
+		Name   string `json:"name"`
+		Line   string `json:"line"`
+		LineID string `json:"line_id"`
+		Type   string `json:"type"`
+		TTL    string `json:"ttl"`
+		Value  string `json:"value"`
+		MX     string `json:"mx"`
+		Status string `json:"status"`
+	} `json:"records"`
+}
+
 func (c *Client) RecordInfo(ctx context.Context, req CommonRequest, recordID int) (RecordInfoResponse, error) {
 	form := req.toForm()
 	form.Set("record_id", strconv.Itoa(recordID))
@@ -87,6 +117,39 @@ func (c *Client) RecordInfo(ctx context.Context, req CommonRequest, recordID int
 	}
 	if out.Status.Code != "1" {
 		return RecordInfoResponse{}, apiError(out.Status)
+	}
+	return out, nil
+}
+
+func (c *Client) RecordList(ctx context.Context, req CommonRequest, p RecordListParams) (RecordListResponse, error) {
+	form := req.toForm()
+	if p.Offset > 0 {
+		form.Set("offset", strconv.Itoa(p.Offset))
+	}
+	if p.Length > 0 {
+		form.Set("length", strconv.Itoa(p.Length))
+	}
+	if p.Keyword != "" {
+		form.Set("keyword", p.Keyword)
+	}
+	if p.SubDomain != "" {
+		form.Set("sub_domain", p.SubDomain)
+	}
+	if p.RecordType != "" {
+		form.Set("record_type", strings.ToUpper(p.RecordType))
+	}
+	if p.RecordLineID != "" {
+		form.Set("record_line_id", p.RecordLineID)
+	} else if p.RecordLine != "" {
+		form.Set("record_line", p.RecordLine)
+	}
+
+	var out RecordListResponse
+	if err := c.postForm(ctx, "/Record.List", form, &out); err != nil {
+		return RecordListResponse{}, err
+	}
+	if out.Status.Code != "1" {
+		return RecordListResponse{}, apiError(out.Status)
 	}
 	return out, nil
 }

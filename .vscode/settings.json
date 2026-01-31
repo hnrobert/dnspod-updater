@@ -6,11 +6,15 @@
         "GOARCH",
         "GOOS",
         "Iface",
+        "ifaces",
+        "ifname",
         "ipdetect",
+        "IRTT",
         "ldflags",
         "nonroot",
         "ONESHOT",
         "proc",
+        "resp",
         "trimpath"
     ]
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ type IPDetector interface {
 
 type DNSPodClient interface {
 	RecordInfo(ctx context.Context, req dnspod.CommonRequest, recordID int) (dnspod.RecordInfoResponse, error)
+	RecordList(ctx context.Context, req dnspod.CommonRequest, p dnspod.RecordListParams) (dnspod.RecordListResponse, error)
 	RecordModify(ctx context.Context, req dnspod.CommonRequest, recordID int, p dnspod.ModifyRecordParams) (dnspod.RecordModifyResponse, error)
 }
 
@@ -95,12 +97,64 @@ func (u *Updater) checkAndUpdateOnce(ctx context.Context) error {
 		DomainID:     u.opt.Config.DomainID,
 	}
 
-	info, err := u.opt.DNSPod.RecordInfo(ctx, common, u.opt.Config.RecordID)
-	if err != nil {
-		return fmt.Errorf("Record.Info failed: %w", err)
+	recordID := u.opt.Config.RecordID
+	var current string
+	var recordName string
+	var recordType string
+	var recordLine string
+	var recordLineID string
+
+	if recordID > 0 {
+		info, err := u.opt.DNSPod.RecordInfo(ctx, common, recordID)
+		if err != nil {
+			return fmt.Errorf("Record.Info failed: %w", err)
+		}
+		current = strings.TrimSpace(info.Record.Value)
+		recordName = strings.TrimSpace(info.Record.Name)
+		recordType = strings.TrimSpace(info.Record.Type)
+		recordLine = strings.TrimSpace(info.Record.Line)
+		recordLineID = strings.TrimSpace(info.Record.LineID)
+		u.opt.Logger.Printf("target record id=%d name=%q value=%q", recordID, recordName, current)
+	} else {
+		// Resolve record id by (domain + sub_domain). Pick the first matching record.
+		list, err := u.opt.DNSPod.RecordList(ctx, common, dnspod.RecordListParams{
+			SubDomain:  u.opt.Config.SubDomain,
+			RecordType: u.opt.Config.RecordType,
+			Offset:     0,
+			Length:     100,
+		})
+		if err != nil {
+			return fmt.Errorf("Record.List failed: %w", err)
+		}
+		if len(list.Records) == 0 {
+			return fmt.Errorf("no records found for sub_domain=%q", u.opt.Config.SubDomain)
+		}
+
+		// Prefer exact type match (e.g. A). Otherwise just take the first record.
+		idx := 0
+		wantType := strings.ToUpper(strings.TrimSpace(u.opt.Config.RecordType))
+		if wantType != "" {
+			for i := range list.Records {
+				if strings.ToUpper(strings.TrimSpace(list.Records[i].Type)) == wantType {
+					idx = i
+					break
+				}
+			}
+		}
+
+		rec := list.Records[idx]
+		parsedID, err := strconv.Atoi(strings.TrimSpace(rec.ID))
+		if err != nil || parsedID <= 0 {
+			return fmt.Errorf("invalid record id from Record.List: %q", rec.ID)
+		}
+		recordID = parsedID
+		current = strings.TrimSpace(rec.Value)
+		recordName = strings.TrimSpace(rec.Name)
+		recordType = strings.TrimSpace(rec.Type)
+		recordLine = strings.TrimSpace(rec.Line)
+		recordLineID = strings.TrimSpace(rec.LineID)
+		u.opt.Logger.Printf("resolved record id=%d name=%q type=%q line_id=%q value=%q", recordID, recordName, recordType, recordLineID, current)
 	}
-	current := strings.TrimSpace(info.Record.Value)
-	u.opt.Logger.Printf("record current value=%q name=%q", current, info.Record.Name)
 
 	if current == want {
 		u.opt.Logger.Printf("no update needed (same IP)")
@@ -113,11 +167,25 @@ func (u *Updater) checkAndUpdateOnce(ctx context.Context) error {
 		weightPtr = &w
 	}
 
-	_, err = u.opt.DNSPod.RecordModify(ctx, common, u.opt.Config.RecordID, dnspod.ModifyRecordParams{
-		SubDomain:    u.opt.Config.SubDomain,
-		RecordType:   u.opt.Config.RecordType,
-		RecordLine:   u.opt.Config.RecordLine,
-		RecordLineID: u.opt.Config.RecordLineID,
+	// Preserve the existing record type/line by default.
+	// If user provided DNSPOD_RECORD_LINE_ID, it takes precedence.
+	useLineID := strings.TrimSpace(u.opt.Config.RecordLineID)
+	useLine := u.opt.Config.RecordLine
+	if useLineID == "" {
+		useLineID = recordLineID
+		useLine = recordLine
+	}
+
+	useType := u.opt.Config.RecordType
+	if strings.TrimSpace(useType) == "" {
+		useType = recordType
+	}
+
+	_, err = u.opt.DNSPod.RecordModify(ctx, common, recordID, dnspod.ModifyRecordParams{
+		SubDomain:    recordName,
+		RecordType:   useType,
+		RecordLine:   useLine,
+		RecordLineID: useLineID,
 		Value:        want,
 		MX:           u.opt.Config.MX,
 		TTL:          u.opt.Config.TTL,

@@ -93,9 +93,6 @@ func FromEnv() (Config, error) {
 	if cfg.Domain == "" && cfg.DomainID == 0 {
 		return Config{}, errors.New("DNSPOD_DOMAIN or DNSPOD_DOMAIN_ID is required")
 	}
-	if cfg.RecordID == 0 {
-		return Config{}, errors.New("DNSPOD_RECORD_ID is required")
-	}
 	if cfg.RecordType == "MX" && cfg.MX == 0 {
 		return Config{}, errors.New("DNSPOD_MX is required when DNSPOD_RECORD_TYPE=MX")
 	}
