@@ -192,14 +192,35 @@ func (c *Client) RecordModify(ctx context.Context, req CommonRequest, recordID i
 		form.Set("weight", strconv.Itoa(*p.Weight))
 	}
 
-	var out RecordModifyResponse
-	if err := c.postForm(ctx, "/Record.Modify", form, &out); err != nil {
+	body, httpStatus, err := c.postFormBytes(ctx, "/Record.Modify", form)
+	if err != nil {
 		return RecordModifyResponse{}, err
 	}
-	if out.Status.Code != "1" {
-		return RecordModifyResponse{}, apiError(out.Status)
+	if httpStatus < 200 || httpStatus >= 300 {
+		return RecordModifyResponse{}, fmt.Errorf("dnspod http %d: %s", httpStatus, truncate(string(body), 512))
 	}
-	return out, nil
+
+	var out RecordModifyResponse
+	if err := json.Unmarshal(body, &out); err == nil {
+		if out.Status.Code != "1" {
+			return RecordModifyResponse{}, apiError(out.Status)
+		}
+		return out, nil
+	}
+
+	// Fallback: some fields can be returned as number/string inconsistently.
+	// If status.code indicates success, treat it as success even if record payload can't be decoded.
+	var statusOnly struct {
+		Status Status `json:"status"`
+	}
+	if err2 := json.Unmarshal(body, &statusOnly); err2 == nil {
+		if statusOnly.Status.Code == "1" {
+			return RecordModifyResponse{Status: statusOnly.Status}, nil
+		}
+		return RecordModifyResponse{}, apiError(statusOnly.Status)
+	}
+
+	return RecordModifyResponse{}, fmt.Errorf("decode response: %w (body=%s)", err, truncate(string(body), 512))
 }
 
 type CommonRequest struct {
@@ -246,31 +267,39 @@ func apiError(s Status) error {
 }
 
 func (c *Client) postForm(ctx context.Context, path string, form url.Values, out any) error {
+	body, status, err := c.postFormBytes(ctx, path, form)
+	if err != nil {
+		return err
+	}
+	if status < 200 || status >= 300 {
+		return fmt.Errorf("dnspod http %d: %s", status, truncate(string(body), 512))
+	}
+	if err := json.Unmarshal(body, out); err != nil {
+		return fmt.Errorf("decode response: %w (body=%s)", err, truncate(string(body), 512))
+	}
+	return nil
+}
+
+func (c *Client) postFormBytes(ctx context.Context, path string, form url.Values) ([]byte, int, error) {
 	u := c.baseURL + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, strings.NewReader(form.Encode()))
 	if err != nil {
-		return err
+		return nil, 0, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("User-Agent", c.userAgent)
 
 	resp, err := c.hc.Do(req)
 	if err != nil {
-		return err
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
 
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return nil, resp.StatusCode, err
 	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("dnspod http %d: %s", resp.StatusCode, truncate(string(b), 512))
-	}
-	if err := json.Unmarshal(b, out); err != nil {
-		return fmt.Errorf("decode response: %w (body=%s)", err, truncate(string(b), 512))
-	}
-	return nil
+	return b, resp.StatusCode, nil
 }
 
 func truncate(s string, n int) string {
