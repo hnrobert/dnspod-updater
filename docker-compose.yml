@@ -1,0 +1,10 @@
+services:
+  dnspod-updater:
+    image: ghcr.io/${GITHUB_REPOSITORY:-hnrobert/dnspod-updater}:latest
+    # 或者改为 build: . 以本地构建
+    # build:
+    #   context: .
+    network_mode: host
+    restart: unless-stopped
+    env_file:
+      - .env

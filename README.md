@@ -27,6 +27,28 @@ docker run --rm --network host \
  dnspod-updater:latest
 ```
 
+## 快速开始（docker-compose + .env）
+
+1) 复制配置文件：
+
+```bash
+cp .env.example .env
+```
+
+1) 编辑 `.env`，填入 `DNSPOD_LOGIN_TOKEN` / `DNSPOD_DOMAIN` / `DNSPOD_RECORD_ID` 等。
+
+2) 启动：
+
+```bash
+docker compose up -d
+```
+
+查看日志：
+
+```bash
+docker compose logs -f
+```
+
 只运行一次（启动即更新/不更新后退出）：
 
 ```bash
@@ -83,4 +105,4 @@ go run ./cmd/dnspod-updater
 ## 注意事项
 
 - DNSPod 传统 API 有“1 小时内超过 5 次无变动修改会锁定 1 小时”的限制；本工具会先 `Record.Info` 比较当前值，只有 IP 变化才调用 `Record.Modify`。
-- Docker Desktop（macOS/Windows）对 `--network host` 支持与 Linux 不同；如果你在 Docker Desktop 上跑，需要确认能否拿到宿主机网卡 IP。
+- `docker-compose.yml` 使用了 `network_mode: host`，这在 Linux 上最符合“拿宿主机默认路由网卡 IP”的需求；Docker Desktop（macOS/Windows）对 host 网络支持不同，可能无法达到预期。
